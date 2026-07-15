@@ -89,13 +89,37 @@ basekit-suite/
 
 ## 5. 動作手順 ＆ ビルド手順
 
-### 5.1. 依存関係のセットアップ
+### 5.1. 環境変数の設定（本番運用時）
+
+ローカル開発環境ではすべての設定にデフォルト値が適用されるため、環境変数の設定なしでも動作します。ただし、**本番環境または複数人で共用する場合は以下の環境変数を設定してください。**
+
+`packages/core/` 直下に `.env.local` ファイルを作成し、以下を記述します。
+
+```env
+# セッション署名キー
+# 未設定の場合、開発用フォールバック値 ('basekit_default_secret_key_for_development') が使用されます。
+# 本番・共用環境では必ず推測困難な値に変更してください。
+SESSION_SECRET=your-secret-key-here
+
+# 認証バイパス（true: 認証スキップ, false: 認証を強制）
+# 初期値は true（ローカル個人利用向け）
+NEXT_PUBLIC_DISABLE_AUTH=true
+
+# AI Provider (gemini または ollama)
+AI_PROVIDER=gemini
+NEXT_PUBLIC_GEMINI_API_KEY=your-gemini-api-key-here
+
+# データベース接続先 (localstorage, mock, postgres)
+DB_PROVIDER=localstorage
+```
+
+### 5.2. 依存関係のセットアップ
 モノレポのルートディレクトリで以下を実行します：
 ```bash
 npm install
 ```
 
-### 5.2. ローカル開発サーバーの起動
+### 5.3. ローカル開発サーバーの起動
 *   **共通ポータル (Next.js)** を起動する場合:
     ```bash
     npm run dev:core
@@ -108,7 +132,7 @@ npm install
     ```
     ブラウザで `http://localhost:5173` を開きます。データベースは `localStorage` 上で完全に閉じた状態で動作します。
 
-### 5.3. ビルドと静的検証
+### 5.4. ビルドと静的検証
 *   **モノレポ全体のビルド**:
     ```bash
     npm run build:all
