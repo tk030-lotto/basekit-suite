@@ -1,8 +1,6 @@
 import React from 'react';
 import './globals.css';
-import Sidebar from '../components/Sidebar';
-import Header from '../components/Header';
-import DisclaimerGate from '../components/DisclaimerGate';
+import AppLayout from '../components/AppLayout';
 
 export const metadata = {
   title: 'BaseKit Suite Portal',
@@ -17,16 +15,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body>
-        <DisclaimerGate />
-        <div className="app-container">
-          <Sidebar />
-          <div className="main-content">
-            <Header />
-            <main className="content-body">
-              {children}
-            </main>
-          </div>
-        </div>
+        <AppLayout>{children}</AppLayout>
       </body>
     </html>
   );

@@ -18,12 +18,30 @@ export default function SettingsPage() {
   const [postgresPassword, setPostgresPassword] = useState<string>('');
   const [postgresSsl, setPostgresSsl] = useState<boolean>(false);
 
+  // Auth Settings States
+  const [bypassAuth, setBypassAuth] = useState<boolean>(true);
+  const [isEnvBypassOverridden, setIsEnvBypassOverridden] = useState<boolean>(false);
+  const [envBypassValue, setEnvBypassValue] = useState<boolean>(true);
+
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<{ type: 'success' | 'error' | 'loading' | null; message: string }>({ type: null, message: '' });
   const [dbTestStatus, setDbTestStatus] = useState<{ type: 'success' | 'error' | 'loading' | null; message: string }>({ type: null, message: '' });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // Load Auth Settings
+      const envVal = process.env.NEXT_PUBLIC_DISABLE_AUTH;
+      const isOverridden = envVal !== undefined && envVal !== '';
+      setIsEnvBypassOverridden(isOverridden);
+
+      if (isOverridden) {
+        setBypassAuth(envVal === 'true');
+        setEnvBypassValue(envVal === 'true');
+      } else {
+        const storedBypass = localStorage.getItem('basekit_bypass_auth');
+        setBypassAuth(storedBypass !== 'false'); // default to true
+      }
+
       // Load AI Settings
       setProvider(localStorage.getItem('basekit_ai_provider') || 'gemini');
       setGeminiApiKey(localStorage.getItem('GEMINI_API_KEY') || '');
@@ -42,6 +60,13 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = () => {
+    // Save Auth Settings
+    if (!isEnvBypassOverridden) {
+      localStorage.setItem('basekit_bypass_auth', bypassAuth ? 'true' : 'false');
+      // Set session cookie bypass flag for Next.js middleware
+      document.cookie = `basekit_bypass_auth=${bypassAuth ? 'true' : 'false'}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+    }
+
     // Save AI Settings
     localStorage.setItem('basekit_ai_provider', provider);
     localStorage.setItem('GEMINI_API_KEY', geminiApiKey);
@@ -570,6 +595,74 @@ export default function SettingsPage() {
             {dbTestStatus.message}
           </div>
         )}
+      </div>
+
+      {/* Auth Settings Section */}
+      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
+          認証・セキュリティ設定
+        </h2>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255, 255, 255, 0.01)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+            <div>
+              <div style={{ fontWeight: '600', color: '#fff', marginBottom: '4px' }}>ログインバイパス (Login Bypass)</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                有効にすると、ログイン画面を自動でスキップし、管理者権限（ADMIN）として直接ポータルに入ります。
+              </div>
+            </div>
+            <div style={{ position: 'relative', width: '44px', height: '24px' }}>
+              <input
+                type="checkbox"
+                id="auth-bypass-toggle"
+                checked={bypassAuth}
+                disabled={isEnvBypassOverridden}
+                onChange={(e) => setBypassAuth(e.target.checked)}
+                style={{
+                  width: '44px',
+                  height: '24px',
+                  appearance: 'none',
+                  backgroundColor: bypassAuth ? 'var(--primary)' : '#475569',
+                  borderRadius: '12px',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  outline: 'none',
+                  cursor: isEnvBypassOverridden ? 'not-allowed' : 'pointer',
+                  transition: 'background-color 0.2s',
+                  opacity: isEnvBypassOverridden ? 0.6 : 1,
+                  margin: 0
+                }}
+              />
+              <span style={{
+                position: 'absolute',
+                top: '2px',
+                left: bypassAuth ? '22px' : '2px',
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                backgroundColor: '#fff',
+                pointerEvents: 'none',
+                transition: 'left 0.2s',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+              }} />
+            </div>
+          </div>
+
+          {isEnvBypassOverridden && (
+            <div style={{
+              marginTop: '8px',
+              padding: '12px 16px',
+              borderRadius: '6px',
+              backgroundColor: 'rgba(56, 189, 248, 0.08)',
+              border: '1px solid rgba(56, 189, 248, 0.15)',
+              color: 'var(--primary)',
+              fontSize: '12px'
+            }}>
+              ℹ️ 環境変数 <code>NEXT_PUBLIC_DISABLE_AUTH={envBypassValue ? 'true' : 'false'}</code> が設定されているため、UIからの変更は無効化されています。
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Save Settings Bar */}

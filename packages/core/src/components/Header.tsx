@@ -1,10 +1,52 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 export default function Header() {
-  const isAuthBypassed = process.env.NEXT_PUBLIC_DISABLE_AUTH !== 'false';
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isBypassed, setIsBypassed] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const fetchSession = async () => {
+    try {
+      const res = await fetch('/api/auth/session');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          setUserEmail(data.user.email);
+          setIsBypassed(!!data.bypassed);
+        } else {
+          setUserEmail(null);
+          setIsBypassed(false);
+        }
+      }
+    } catch (e) {
+      console.error('[Header] Failed to fetch session:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSession();
+    // Listen for custom settings storage events (e.g. when settings are saved)
+    window.addEventListener('storage', fetchSession);
+    return () => {
+      window.removeEventListener('storage', fetchSession);
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      if (res.ok) {
+        window.location.href = '/login';
+      }
+    } catch (e) {
+      console.error('[Header] Logout failed:', e);
+    }
+  };
 
   const resetConsent = () => {
     localStorage.removeItem('basekit_disclaimer_accepted');
@@ -32,7 +74,7 @@ export default function Header() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        {isAuthBypassed && (
+        {isBypassed && (
           <span style={{
             fontSize: '12px',
             backgroundColor: 'rgba(56, 189, 248, 0.1)',
@@ -93,6 +135,32 @@ export default function Header() {
           免責再表示
         </button>
 
+        {!isBypassed && userEmail && (
+          <button
+            onClick={handleLogout}
+            style={{
+              fontSize: '12px',
+              backgroundColor: 'transparent',
+              color: '#cbd5e1',
+              border: '1px solid #334155',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              transition: 'var(--transition-smooth)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#ef4444';
+              e.currentTarget.style.borderColor = '#ef4444';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#cbd5e1';
+              e.currentTarget.style.borderColor = '#334155';
+            }}
+          >
+            🚪 ログアウト
+          </button>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{
             width: '32px',
@@ -106,9 +174,11 @@ export default function Header() {
             fontWeight: 'bold',
             color: '#fff'
           }}>
-            A
+            {isBypassed ? 'A' : (userEmail ? userEmail.charAt(0).toUpperCase() : 'U')}
           </div>
-          <span style={{ fontSize: '14px', fontWeight: '500' }}>Administrator</span>
+          <span style={{ fontSize: '14px', fontWeight: '500' }}>
+            {isBypassed ? 'Administrator' : (userEmail || 'User')}
+          </span>
         </div>
       </div>
     </header>
