@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { IDatabaseConnection } from '../core/src/types';
+import { pluginBus } from '../core/src/lib/bus/PluginBus';
 
 interface PersonalOpsPluginProps {
   dbConnection?: IDatabaseConnection;
@@ -276,6 +277,14 @@ export default function PersonalOpsPlugin({ dbConnection }: PersonalOpsPluginPro
       saveTimerState(null, false, 0);
 
       await loadData();
+      pluginBus.emit('personal-ops:work-log-added', {
+        logId,
+        taskId: activeTimerTaskId,
+        taskTitle: taskName,
+        durationMinutes: durationMin,
+        memo: memo || `${taskName}のタイマー計測`,
+        workDate: logDate
+      });
       alert(`作業時間 ${durationMin} 分を記録しました！`);
     } catch (e) {
       console.error('Failed to save timer logs:', e);
@@ -326,6 +335,13 @@ export default function PersonalOpsPlugin({ dbConnection }: PersonalOpsPluginPro
         [status, nowStr, taskId]
       );
       await loadData();
+      if (status === 'DONE') {
+        const targetTask = tasks.find(t => t.id === taskId);
+        pluginBus.emit('personal-ops:task-completed', {
+          taskId,
+          title: targetTask ? targetTask.title : '不明なタスク'
+        });
+      }
     } catch (e) {
       console.error('Failed to update status:', e);
       alert('エラー：ステータスの更新に失敗しました。');
@@ -408,6 +424,16 @@ export default function PersonalOpsPlugin({ dbConnection }: PersonalOpsPluginPro
       setLogMemo('');
       setLogDuration('30');
       await loadData();
+      const targetTask = tasks.find(t => t.id === selectedTaskIdForLog);
+      const taskName = targetTask ? targetTask.title : 'タスク';
+      pluginBus.emit('personal-ops:work-log-added', {
+        logId,
+        taskId: selectedTaskIdForLog,
+        taskTitle: taskName,
+        durationMinutes: durationMin,
+        memo: logMemo.trim() || '手動作業時間記録',
+        workDate: logDate
+      });
     } catch (e) {
       console.error('Failed to save manual log:', e);
       alert('エラー：ログの保存に失敗しました。');
