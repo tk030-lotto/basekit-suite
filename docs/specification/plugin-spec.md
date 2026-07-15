@@ -90,7 +90,9 @@ export class BookkeepingRepository {
 プラグイン間の直接結合を回避するため、プラグイン同士の直接通信・関数インポートを原則禁止し、`PluginBus` による非同期イベント通信に統一する。
 
 ```typescript
-// コミット完了後、プラグインバスに通知 (呼び出し元の処理をブロックしない)
+// （将来の拡張例）複式簿記プラグインが独自にイベントを発行する場合の実装イメージ。
+// 現行実装では App.tsx が personal-ops:work-log-added を購読し、
+// 直接 bookkeeping_drafts テーブルへ INSERT する構成を採用している。
 await pluginBus.emit('bookkeeping:journal_created', journalData);
 ```
 
