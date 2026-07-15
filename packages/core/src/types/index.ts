@@ -50,3 +50,19 @@ export interface IDataImporter {
 export interface INotificationProvider {
   send(title: string, body: string, recipient?: string): Promise<void>;
 }
+
+export type DatabaseProviderType = 'localstorage' | 'postgres' | 'mock-postgres';
+
+export interface PostgresConfig {
+  host?: string;
+  port?: number;
+  database?: string;
+  user?: string;
+  password?: string;
+  ssl?: boolean;
+}
+
+export interface DatabaseConfig {
+  provider: DatabaseProviderType;
+  postgres?: PostgresConfig;
+}

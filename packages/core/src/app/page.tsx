@@ -19,8 +19,14 @@ export default function DashboardPage() {
         setAiStatus(hasKey ? 'Gemini 1.5 Flash (Active)' : 'Gemini 1.5 Flash (Key Not Set)');
       }
       
-      const connType = localStorage.getItem('basekit_db_type') || 'LocalStorage (Browser)';
-      setDbMode(connType);
+      const dbProvider = localStorage.getItem('basekit_db_provider') || 'localstorage';
+      let friendlyDb = 'LocalStorage (Browser)';
+      if (dbProvider === 'postgres') {
+        friendlyDb = 'PostgreSQL (Active)';
+      } else if (dbProvider === 'mock-postgres') {
+        friendlyDb = 'Mock PostgreSQL (Simulated)';
+      }
+      setDbMode(friendlyDb);
     }
   };
 
