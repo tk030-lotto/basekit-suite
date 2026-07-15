@@ -562,7 +562,20 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
                   {error}
                 </div>
               )}
-              {messages.length === 0 ? (
+              {loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#38bdf8', fontSize: '14px' }}>
+                  <span className="pulse-text">読み込み中...</span>
+                  <style>{`
+                    @keyframes pulseText {
+                      0%, 100% { opacity: 0.6; }
+                      50% { opacity: 1; }
+                    }
+                    .pulse-text {
+                      animation: pulseText 1.5s infinite ease-in-out;
+                    }
+                  `}</style>
+                </div>
+              ) : messages.length === 0 ? (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#6b7280', fontSize: '14px' }}>
                   メッセージがまだありません。最初のメッセージを送信しましょう！
                 </div>
