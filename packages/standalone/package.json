@@ -10,7 +10,8 @@
   "dependencies": {
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "@basekit/plugin-personal-ops": "*"
+    "@basekit/plugin-personal-ops": "*",
+    "@basekit/plugin-sns": "*"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
