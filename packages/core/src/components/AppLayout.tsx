@@ -4,7 +4,6 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import DisclaimerGate from './DisclaimerGate';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -15,17 +14,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <>
-      <DisclaimerGate />
-      <div className="app-container">
-        <Sidebar />
-        <div className="main-content">
-          <Header />
-          <main className="content-body">
-            {children}
-          </main>
-        </div>
+    <div className="app-container">
+      <Sidebar />
+      <div className="main-content">
+        <Header />
+        <main className="content-body">
+          {children}
+        </main>
       </div>
-    </>
+    </div>
   );
 }

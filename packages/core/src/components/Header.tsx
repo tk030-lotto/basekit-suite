@@ -50,6 +50,7 @@ export default function Header() {
 
   const resetConsent = () => {
     localStorage.removeItem('basekit_disclaimer_accepted');
+    document.cookie = 'basekit_disclaimer_accepted=; path=/; max-age=0; SameSite=Lax';
     window.location.reload();
   };
 

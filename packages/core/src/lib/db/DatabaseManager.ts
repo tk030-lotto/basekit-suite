@@ -1,4 +1,5 @@
 import { IDatabaseConnection, IDatabaseManager } from '../../types';
+import { setupPostgresAuditLogs } from './postgresSetup';
 
 class MockConnection implements IDatabaseConnection {
   async query<T = any>(sql: string, params?: any[]): Promise<T> {
@@ -31,6 +32,7 @@ class LocalStorageConnection implements IDatabaseConnection {
     
     const insertMatch = sql.match(/insert\s+into\s+([a-zA-Z0-9_]+)/i);
     const deleteMatch = sql.match(/delete\s+from\s+([a-zA-Z0-9_]+)/i);
+    const updateMatch = sql.match(/update\s+([a-zA-Z0-9_]+)/i);
     
     if (insertMatch) {
       const tableName = insertMatch[1];
@@ -39,15 +41,33 @@ class LocalStorageConnection implements IDatabaseConnection {
       const list = data ? JSON.parse(data) : [];
       
       const newItem = params ? params[0] : {};
-      list.push({ id: crypto.randomUUID(), ...newItem, created_at: new Date().toISOString() });
+      const record = { id: crypto.randomUUID(), ...newItem, created_at: new Date().toISOString() };
+      list.push(record);
       localStorage.setItem(storeKey, JSON.stringify(list));
       
-      this.writeAuditLog('INSERT', tableName, {}, newItem);
+      this.writeAuditLog('INSERT', tableName, {}, record);
     } else if (deleteMatch) {
       const tableName = deleteMatch[1];
       const storeKey = `basekit_db_table_${tableName}`;
       localStorage.removeItem(storeKey);
-      this.writeAuditLog('DELETE', tableName, {}, {});
+      this.writeAuditLog('DELETE (PHYSICAL)', tableName, {}, {});
+    } else if (updateMatch) {
+      const tableName = updateMatch[1];
+      const storeKey = `basekit_db_table_${tableName}`;
+      const data = localStorage.getItem(storeKey);
+      const list = data ? JSON.parse(data) : [];
+      
+      const updatedItem = params ? params[0] : {};
+      let oldVal = {};
+      if (updatedItem && updatedItem.id) {
+        const found = list.find((item: any) => item.id === updatedItem.id);
+        if (found) oldVal = found;
+      }
+      
+      const isLogicalDelete = updatedItem && updatedItem.deleted_at !== undefined && updatedItem.deleted_at !== null;
+      const action = isLogicalDelete ? 'DELETE (LOGICAL)' : 'UPDATE';
+      
+      this.writeAuditLog(action, tableName, oldVal, updatedItem);
     }
   }
 
@@ -89,6 +109,7 @@ class MockPostgresConnection implements IDatabaseConnection {
     
     const insertMatch = sql.match(/insert\s+into\s+([a-zA-Z0-9_]+)/i);
     const deleteMatch = sql.match(/delete\s+from\s+([a-zA-Z0-9_]+)/i);
+    const updateMatch = sql.match(/update\s+([a-zA-Z0-9_]+)/i);
     
     if (insertMatch) {
       const tableName = insertMatch[1];
@@ -97,15 +118,33 @@ class MockPostgresConnection implements IDatabaseConnection {
       const list = data ? JSON.parse(data) : [];
       
       const newItem = params ? params[0] : {};
-      list.push({ id: crypto.randomUUID(), ...newItem, created_at: new Date().toISOString() });
+      const record = { id: crypto.randomUUID(), ...newItem, created_at: new Date().toISOString() };
+      list.push(record);
       localStorage.setItem(storeKey, JSON.stringify(list));
       
-      this.writeAuditLog('INSERT', tableName, {}, newItem);
+      this.writeAuditLog('INSERT', tableName, {}, record);
     } else if (deleteMatch) {
       const tableName = deleteMatch[1];
       const storeKey = `basekit_mock_pg_table_${tableName}`;
       localStorage.removeItem(storeKey);
-      this.writeAuditLog('DELETE', tableName, {}, {});
+      this.writeAuditLog('DELETE (PHYSICAL)', tableName, {}, {});
+    } else if (updateMatch) {
+      const tableName = updateMatch[1];
+      const storeKey = `basekit_mock_pg_table_${tableName}`;
+      const data = localStorage.getItem(storeKey);
+      const list = data ? JSON.parse(data) : [];
+      
+      const updatedItem = params ? params[0] : {};
+      let oldVal = {};
+      if (updatedItem && updatedItem.id) {
+        const found = list.find((item: any) => item.id === updatedItem.id);
+        if (found) oldVal = found;
+      }
+      
+      const isLogicalDelete = updatedItem && updatedItem.deleted_at !== undefined && updatedItem.deleted_at !== null;
+      const action = isLogicalDelete ? 'DELETE (LOGICAL)' : 'UPDATE';
+      
+      this.writeAuditLog(action, tableName, oldVal, updatedItem);
     }
   }
 
@@ -184,6 +223,7 @@ export class PostgreSqlConnection implements IDatabaseConnection {
       });
       await client.connect();
       try {
+        await setupPostgresAuditLogs(client);
         const result = await client.query(sql, params);
         return result.rows as T;
       } finally {
@@ -217,6 +257,7 @@ export class PostgreSqlConnection implements IDatabaseConnection {
       });
       await client.connect();
       try {
+        await setupPostgresAuditLogs(client);
         await client.query(sql, params);
       } finally {
         await client.end();

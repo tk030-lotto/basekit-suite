@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Client } from 'pg';
+import { setupPostgresAuditLogs } from '../../../lib/db/postgresSetup';
 
 export async function POST(request: Request) {
   try {
@@ -29,9 +30,11 @@ export async function POST(request: Request) {
         const result = await client.query('SELECT 1 as connected;');
         return NextResponse.json({ success: true, message: '接続テスト成功', result: result.rows });
       } else if (action === 'query') {
+        await setupPostgresAuditLogs(client);
         const result = await client.query(sql, params);
         return NextResponse.json({ success: true, rows: result.rows });
       } else if (action === 'execute') {
+        await setupPostgresAuditLogs(client);
         await client.query(sql, params);
         return NextResponse.json({ success: true });
       } else {

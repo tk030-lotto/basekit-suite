@@ -2,37 +2,58 @@
 
 import React, { useState, useEffect } from 'react';
 
-export default function DisclaimerGate() {
-  const [accepted, setAccepted] = useState<boolean>(true); // default to true to prevent flash, then update in useEffect
+export default function DisclaimerPage() {
   const [checked, setChecked] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    const isAccepted = localStorage.getItem('basekit_disclaimer_accepted');
-    if (isAccepted === 'true') {
-      setAccepted(true);
+    // Check if already accepted (though middleware should have redirected, client-side fallback)
+    const isAcceptedCookie = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('basekit_disclaimer_accepted='));
+    const isAcceptedLocal = localStorage.getItem('basekit_disclaimer_accepted');
+
+    if (isAcceptedCookie?.split('=')[1] === 'true' || isAcceptedLocal === 'true') {
+      // If cookie is missing but localStorage has it, sync them
+      if (!isAcceptedCookie) {
+        document.cookie = 'basekit_disclaimer_accepted=true; path=/; max-age=31536000; SameSite=Lax';
+      }
+      window.location.href = '/';
     } else {
-      setAccepted(false);
+      setLoading(false);
     }
   }, []);
 
   const handleAccept = () => {
     if (checked) {
+      // Set acceptance cookie for 1 year
+      document.cookie = 'basekit_disclaimer_accepted=true; path=/; max-age=31536000; SameSite=Lax';
+      // Sync with localStorage
       localStorage.setItem('basekit_disclaimer_accepted', 'true');
-      setAccepted(true);
+      // Redirect to portal home
+      window.location.href = '/';
     }
   };
 
-  if (accepted) return null;
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#090d16',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#94a3b8'
+      }}>
+        読み込み中...
+      </div>
+    );
+  }
 
   return (
     <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      minHeight: '100vh',
       backgroundColor: '#090d16',
-      zIndex: 9999,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -46,8 +67,7 @@ export default function DisclaimerGate() {
         border: '1px solid rgba(255, 255, 255, 0.1)',
         borderRadius: '16px',
         padding: '32px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-        animation: 'fadeIn 0.5s ease-out'
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <h1 style={{
@@ -102,7 +122,7 @@ export default function DisclaimerGate() {
             2. 特に複式簿記プラグインによる決算書類の下書き出力、個人業務効率化による工数計算、SNSプラグインによる情報共有については、最終的な信頼性と法的な正当性を含め、ユーザーの自己責任において検証・管理するものとします。
           </p>
           <p>
-            3. 本システムは個人利用の簡便化のために「認証を完全にバイパスする機能（NEXT_PUBLIC_DISABLE_AUTH=true）」を提供しますが、これを有効にして公開ネットワーク上で実行した場合、第三者へのデータ露出リスクが生じます。この設定のセキュリティ責任は運用者に帰属します。
+            3. 本システムは個人利用 of 簡便化のために「認証を完全にバイパスする機能（NEXT_PUBLIC_DISABLE_AUTH=true）」を提供しますが、これを有効にして公開ネットワーク上で実行した場合、第三者へのデータ露出リスクが生じます。この設定のセキュリティ責任は運用者に帰属します。
           </p>
         </div>
 
@@ -142,15 +162,17 @@ export default function DisclaimerGate() {
           <button
             onClick={handleAccept}
             disabled={!checked}
-            className="btn-primary"
             style={{
               padding: '12px 32px',
               fontSize: '15px',
               fontWeight: '600',
-              opacity: checked ? 1 : 0.5,
+              backgroundColor: checked ? '#38bdf8' : '#334155',
+              color: checked ? '#0f172a' : '#64748b',
+              border: 'none',
               cursor: checked ? 'pointer' : 'not-allowed',
               width: '100%',
-              borderRadius: '8px'
+              borderRadius: '8px',
+              transition: 'all 0.2s ease-in-out'
             }}
           >
             BaseKit Suiteの利用を開始する

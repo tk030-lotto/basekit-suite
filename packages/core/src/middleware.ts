@@ -6,16 +6,29 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Skip middleware for static assets, public files, and API endpoints
-  // Specifically, ignore next-internal files, static assets (images, favicon, etc.)
   if (
     pathname.startsWith('/_next') ||
     pathname.includes('.') || // static files like favicon.ico, images, etc.
-    pathname.startsWith('/api/auth') // let auth API routes pass through
+    pathname.startsWith('/api/') // let DB API, auth API, AI API pass through
   ) {
     return NextResponse.next();
   }
 
-  // 2. Read cookies for bypass flag and session token
+  // 2. Check disclaimer consent cookie
+  const disclaimerAccepted = request.cookies.get('basekit_disclaimer_accepted')?.value === 'true';
+
+  if (pathname === '/disclaimer') {
+    if (disclaimerAccepted) {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (!disclaimerAccepted) {
+    return NextResponse.redirect(new URL('/disclaimer', request.url));
+  }
+
+  // 3. Read cookies for bypass flag and session token
   const bypassCookie = request.cookies.get('basekit_bypass_auth')?.value;
   const sessionToken = request.cookies.get('basekit_session')?.value;
 
@@ -29,7 +42,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 3. If auth is not bypassed, check for active session
+  // 4. If auth is not bypassed, check for active session
   let isSessionValid = false;
   if (sessionToken) {
     const session = await verifySession(sessionToken);
