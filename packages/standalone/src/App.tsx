@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PersonalOpsPlugin from '@basekit/plugin-personal-ops';
+import SnsPlugin from '@basekit/plugin-sns';
 import { LocalStorageConnection } from './lib/db/LocalStorageConnection';
+import { pluginBus } from '../../core/src/lib/bus/PluginBus';
 
 const dbConnection = new LocalStorageConnection();
 
@@ -37,6 +39,58 @@ const WifiOffIcon = () => (
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'bookkeeping' | 'sns'>('dashboard');
+
+  useEffect(() => {
+    const ensureSystemThreadAndPost = async (content: string) => {
+      try {
+        const threadId = 'thread-sys-feed';
+        const nowStr = new Date().toISOString();
+
+        // Check if thread exists
+        const threads = await dbConnection.query(
+          'SELECT * FROM sns_threads WHERE id = $1 AND deleted_at IS NULL',
+          [threadId]
+        );
+
+        if (!threads || threads.length === 0) {
+          await dbConnection.execute(
+            'INSERT INTO sns_threads (id, title, created_by, created_at, updated_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6)',
+            [threadId, '📢 システム通知・アクティビティフィード', 'システム', nowStr, nowStr, null]
+          );
+        }
+
+        // Insert message
+        const msgId = crypto.randomUUID();
+        await dbConnection.execute(
+          'INSERT INTO sns_messages (id, thread_id, content, sender, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6)',
+          [msgId, threadId, content, 'システム', nowStr, null]
+        );
+
+        // Update thread updated_at
+        await dbConnection.execute(
+          'UPDATE sns_threads SET updated_at = $1 WHERE id = $2',
+          [nowStr, threadId]
+        );
+      } catch (err) {
+        console.error('[App.tsx] Failed to post automated feed:', err);
+      }
+    };
+
+    const unsubscribeTask = pluginBus.subscribe('personal-ops:task-completed', async (data) => {
+      const content = `📢 【システム通知】タスクが完了しました！\nタスク名: 「${data.title}」`;
+      await ensureSystemThreadAndPost(content);
+    });
+
+    const unsubscribeLog = pluginBus.subscribe('personal-ops:work-log-added', async (data) => {
+      const content = `📢 【システム通知】工数が登録されました！\nタスク名: 「${data.taskTitle}」\n作業時間: ${data.durationMinutes}分\nメモ: ${data.memo}`;
+      await ensureSystemThreadAndPost(content);
+    });
+
+    return () => {
+      unsubscribeTask();
+      unsubscribeLog();
+    };
+  }, []);
 
   return (
     <div className="app-container" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#0b0f19', color: '#f8fafc' }}>
@@ -292,7 +346,11 @@ export default function App() {
           <PersonalOpsPlugin dbConnection={dbConnection} />
         )}
 
-        {(activeTab === 'bookkeeping' || activeTab === 'sns') && (
+        {activeTab === 'sns' && (
+          <SnsPlugin dbConnection={dbConnection} />
+        )}
+
+        {activeTab === 'bookkeeping' && (
           <div className="glass-panel animate-fade-in" style={{ padding: '40px', textAlign: 'center' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚙️</div>
             <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '12px' }}>準備中 (ステップ3-2 以降で接続予定)</h2>
