@@ -1,56 +1,71 @@
-# BaseKit Suite 開発引き継ぎサマリー (2026-07-14)
+# BaseKit Suite 開発引き継ぎサマリー (2026-07-15 - P2-3完了)
 
-本ドキュメントは、プロジェクト「BaseKit Suite」の開発移行（フェーズ1）完了時点での状況、決定された設計思想、および次回開始時のタスクをまとめた引き継ぎ書である。
+本ドキュメントは、プロジェクト「BaseKit Suite」のフェーズ2「コア再構築」におけるステップ2-3「データベース抽象化レイヤー（マルチDB接続）」完了時点での状況、システム構成、および次回開始時のタスクをまとめた引き継ぎ書である。
 
 ---
 
 ## 1. プロジェクト基本情報
 *   **プロジェクト名**: BaseKit Suite
 *   **プロジェクトディレクトリ**: `c:\Users\tk030\Desktop\basekit-suite`
-*   **現在の進捗**: フェーズ1「準備」完了。新モノレポ構造の初期化およびドキュメントのMarkdown移行・配置が完了。
+*   **現在の進捗**: フェーズ2-3「データベース抽象化レイヤー（マルチDB接続）」完了。全体進捗率 50%。
 *   **開発計画書**: プロジェクトルートの `DEVELOPMENT_PLAN.md` に最新のマイルストーン工程表が設置済。
-*   **対話ログ**: `docs/development_logs/complete_chat_history.md` に本日行われた設計議論の全記録がMarkdown化済。
+*   **開発実績記録**: `各種情報\Projects\BaseKit_Suite\RECORD.md` に各フェーズの完了履歴が記載済。
 
 ---
 
-## 2. 物理フォルダ構成（モノレポ）
-`npm workspaces` を採用し、以下の5つの独立パッケージに物理分割されています。
+## 2. 物理フォルダ構成と主要モジュール
+`npm workspaces` を採用したモノレポ物理構成：
 
 ```plaintext
 basekit-suite/
-├── core/                       # ① Coreパッケージ (Next.jsWebポータル基盤)
-├── standalone/                 # ② スタンドアロンパッケージ (ViteプレーンHTML/JS。社用PC用)
-├── plugins/
-│   ├── personal-ops/           # ③ 個人業務効率化プラグイン
-│   ├── bookkeeping/            # ④ 複式簿記プラグイン
-│   └── sns/                    # ⑤ 業務用SNSプラグイン
-├── docs/
-│   ├── constitution/           # 憲法（ブループリント全20章＋あとがき。txtからmdへ変換済）
-│   ├── architecture/           # 技術設計書 (basekit-core-design.md)
-│   └── specification/          # プラグイン開発仕様書 (plugin-spec.md)
-├── DEVELOPMENT_PLAN.md         # 統合開発計画書・工程管理表
-└── README.md                   # 総合案内（docs/へのインデックス目次リンク設置済）
+├── packages/
+│   ├── core/                       # ① Coreパッケージ (Next.js Webポータル基盤)
+│   │   ├── src/
+│   │   │   ├── app/
+│   │   │   │   ├── api/
+│   │   │   │   │   ├── ai/
+│   │   │   │   │   │   └── route.ts  # AIプロキシエンドポイント (Ollama等のCORS回避用)
+│   │   │   │   │   └── db/
+│   │   │   │   │       └── route.ts  # DBプロキシエンドポイント (PostgreSQL等のCORS回避用)
+│   │   │   │   ├── settings/
+│   │   │   │   │   └── page.tsx      # システム設定画面 (AI/DB切り替えと接続疎通テスト)
+│   │   │   │   └── page.tsx          # ダッシュボードポータル
+│   │   │   ├── lib/
+│   │   │   │   ├── ai/
+│   │   │   │   │   ├── LLMProviderFactory.ts
+│   │   │   │   │   ├── GeminiLLMProvider.ts
+│   │   │   │   │   └── OllamaLLMProvider.ts
+│   │   │   │   └── db/
+│   │   │   │       └── DatabaseManager.ts # DB接続マネージャー (LocalStorage/Mock/Postgres動的切り替え)
+│   │   │   └── types/
+│   │   │       └── index.ts          # コアインターフェース・型定義
+│   ├── standalone/                 # ② スタンドアロンパッケージ (ViteプレーンHTML/JS。社用PC用)
+│   └── plugins/
+│       ├── personal-ops/           # ③ 個人業務効率化プラグイン (スケルトン)
+│       ├── bookkeeping/            # ④ 複式簿記プラグイン (スケルトン)
+│       └── sns/                    # ⑤ 業務用SNSプラグイン (スケルトン)
+└── DEVELOPMENT_PLAN.md             # 統合開発計画書・工程管理表
 ```
 
 ---
 
-## 3. 合意された3大「自己防衛」設計思想
+## 3. 合意された「自己防衛」および「マルチDB」設計思想
 
-### ① 「0円運用」の原則
-*   **有料APIの完全排除**: OpenAI等の従量課金APIを前提とせず、**「利用者が各自で用意する無料のGemini APIキー」**または**「完全無料のローカルLLM（Ollama等）」**をサポートする。
-*   **無料インフラ**: DBは無料枠が手厚いSupabaseやNeonを前提とし、容量オーバーを防ぐ防衛設計を敷く。
-*   **クライアントサイド完結**: PDF生成やデータ出力に有料SaaSを一切使わず、ブラウザ内ライブラリ（`jsPDF`等）で処理する。
+### ① 「0円運用」と「自律データベース」の原則
+*   **AIプロバイダの切り替え**: Google Gemini（個人の無料APIキー）とローカルLLMサーバー（Ollama）を、設定画面からノーコードで切り替えて利用可能。
+*   **マルチDB接続抽象化**: 
+    1.  `LocalStorage`: 完全ブラウザ内完結のプライベートかつ無料の運用。
+    2.  `Mock PostgreSQL`: サーバーを持たずにRDB（SQL）クエリやDDL動作をブラウザ内でシミュレートし、LocalStorageで永続化。
+    3.  `PostgreSQL`: Supabase（無料枠あり）やローカルのPostgreSQLサーバーに直接/プロキシ経由で接続し、本格的なRDB運用が可能。
 
-### ② 認証トグル設計
-個人利用（スタンドアロン）時に「ログイン画面」が邪魔になるのを避けるため、環境変数 `NEXT_PUBLIC_DISABLE_AUTH=true` の場合は、認証を完全にバイパスし、システム管理者（ADMIN）としての仮想セッションを自動返却して即座に使える快適なUXを提供する。
-
-### ③ 3大拡張インターフェースのCore定義
-将来の機能追加を容易にするため、AI (`ILLMProvider`)、データ入出力 (`IDataExporter`)、通知 (`INotificationProvider`) をCoreで抽象化。
+### ② データベースCORS回避・認証情報秘匿プロキシ
+*   ブラウザ側から外部PostgreSQLへTCPソケットを直接繋ぐことができないCORS/セキュリティの制限を回避するため、Next.js APIルート `/api/db` を経由したプロキシ通信を構築。
+*   設定画面で入力されたホストやユーザー名、パスワード等の接続パラメータを安全にサーバー側へ引き渡し、サーバー側で `pg` クライアントを用いて疎通確認（接続テスト）やクエリを実行する。
 
 ---
 
 ## 4. 次回開始時のタスク
-統合開発計画書（[DEVELOPMENT_PLAN.md](file:///c:/Users/tk030/Desktop/basekit-suite/DEVELOPMENT_PLAN.md)）の「**P2: コア再構築 - ステップ2-1: CoreパッケージNext.js環境の初期化**」より開始する。
+統合開発計画書（[DEVELOPMENT_PLAN.md](file:///c:/Users/tk030/Desktop/basekit-suite/DEVELOPMENT_PLAN.md)）の「**P2: コア再構築 - ステップ2-4: 認証トグル（ログインバイパス）機能の実装**」より開始する。
 
-1.  `packages/core/` フォルダのNext.js環境を整備し、共通UI（サイドバー、ヘッダー）を備えたポータル画面の土台を構築する。
-2.  データベース接続抽象化マネージャー（PostgreSQL ⇄ localStorage ⇄ SQLite の動的切り替え）のインフラ設計・実装に着手する。
+1.  ローカル開発や個人利用時に、ログイン画面をスキップして即座に画面へログインできるトグルスイッチを設定画面または環境変数に追加・実装する。
+2.  バイパス有効時にダミーの管理者（ADMIN）セッションコンテキストを生成し、システム全体に配るセキュリティバイパス制御の仕組みを `middleware.ts` または認証プロバイダ内に組み込む。
