@@ -7,6 +7,6 @@
   "scripts": {
     "dev:core": "npm run dev -w @basekit/core",
     "dev:standalone": "npm run dev -w @basekit/standalone",
-    "build:all": "npm run build --workspaces"
+    "build:all": "npm run build -w @basekit/core && npm run build -w @basekit/standalone"
   }
 }
