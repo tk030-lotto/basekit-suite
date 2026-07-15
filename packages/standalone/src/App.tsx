@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 // Standard SVG Icon Components for visually stunning UI
 const LockIcon = () => (
@@ -191,7 +191,7 @@ export default function App() {
         {/* Header */}
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '20px' }}>
           <div>
-            <h1 style={{ fontSize: '26px', fontWeight: 700, tracking: '-0.5px' }}>
+            <h1 style={{ fontSize: '26px', fontWeight: 700, letterSpacing: '-0.5px' }}>
               {activeTab === 'dashboard' && 'セキュリティ・コントロールパネル'}
               {activeTab === 'personal' && '個人業務効率化ツール'}
               {activeTab === 'bookkeeping' && '複式簿記ツール'}
