@@ -1,0 +1,12 @@
+{
+  "name": "basekit-suite",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:core": "npm run dev -w @basekit/core",
+    "dev:standalone": "npm run dev -w @basekit/standalone",
+    "build:all": "npm run build --workspaces"
+  }
+}
