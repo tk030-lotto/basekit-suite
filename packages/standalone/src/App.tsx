@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import PersonalOpsPlugin from '@basekit/plugin-personal-ops';
+import { LocalStorageConnection } from './lib/db/LocalStorageConnection';
+
+const dbConnection = new LocalStorageConnection();
 
 // Standard SVG Icon Components for visually stunning UI
 const LockIcon = () => (
@@ -284,7 +288,11 @@ export default function App() {
           </div>
         )}
 
-        {activeTab !== 'dashboard' && (
+        {activeTab === 'personal' && (
+          <PersonalOpsPlugin dbConnection={dbConnection} />
+        )}
+
+        {(activeTab === 'bookkeeping' || activeTab === 'sns') && (
           <div className="glass-panel animate-fade-in" style={{ padding: '40px', textAlign: 'center' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚙️</div>
             <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '12px' }}>準備中 (ステップ3-2 以降で接続予定)</h2>
