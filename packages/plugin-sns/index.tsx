@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { IDatabaseConnection } from '../core/src/types';
-import { pluginBus } from '../core/src/lib/bus/PluginBus';
 
 interface SnsPluginProps {
   dbConnection?: IDatabaseConnection;
@@ -20,9 +19,23 @@ interface Message {
   thread_id: string;
   content: string;
   sender: string;
+  likes?: string; // JSON string of string[] (user names)
+  media_urls?: string; // JSON string of {name, type, data}[]
   created_at: string;
   deleted_at?: string | null;
 }
+
+interface Attachment {
+  name: string;
+  type: string;
+  data: string; // Base64 Data URL
+  size: number;
+}
+
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf', 'text/plain',
+];
 
 export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -38,9 +51,11 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
     return localStorage.getItem('basekit_sns_sender') || '一般ユーザー (山田)';
   });
   const [messageContent, setMessageContent] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<Attachment[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load threads and messages
   const loadData = async (targetThreadId?: string | null) => {
@@ -50,6 +65,8 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
     }
     try {
       setLoading(true);
+      await ensureInitialData();
+
       // Fetch active threads
       const threadsData = await dbConnection.query<Thread[]>(
         'SELECT * FROM sns_threads WHERE deleted_at IS NULL ORDER BY created_at DESC'
@@ -60,7 +77,7 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
       // Select default thread if none selected
       let currentThreadId = targetThreadId !== undefined ? targetThreadId : selectedThreadId;
       if (!currentThreadId && activeThreads.length > 0) {
-        currentThreadId = activeThreads[activeThreads.length - 1].id; // older or first
+        currentThreadId = activeThreads[activeThreads.length - 1].id;
       }
 
       if (currentThreadId) {
@@ -94,8 +111,6 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
       
       if (!activeThreads || activeThreads.length === 0) {
         const now = new Date();
-        
-        // Helper to format ISO time relative to now
         const getOffsetIso = (offsetMinutes: number) => {
           return new Date(now.getTime() - offsetMinutes * 60000).toISOString();
         };
@@ -128,100 +143,72 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
         ];
 
         const defaultMessages = [
-          // System messages
           {
             id: 'msg-sys-1',
             thread_id: 'thread-sys-feed',
             content: '本スレッドはシステムの自動通知専用です。タスク完了や工数登録のログが自動投稿されます。',
             sender: 'システム',
+            likes: '[]',
+            media_urls: '[]',
             created_at: getOffsetIso(120),
             deleted_at: null
           },
-          // Chat messages
           {
             id: 'msg-chat-1',
             thread_id: 'thread-chat-1',
             content: 'BaseKit Suite 開発お疲れ様です！本日の進捗状況や雑談など、こちらで自由につぶやいてください。',
             sender: '管理者',
+            likes: '[]',
+            media_urls: '[]',
             created_at: getOffsetIso(60),
             deleted_at: null
           },
           {
             id: 'msg-chat-2',
             thread_id: 'thread-chat-1',
-            content: '了解です！個人業務効率化ツールと合わせてSNSも試用していきます！',
-            sender: '一般ユーザー (山田)',
+            content: '個人業務効率化ツールでの作業登録時に、 PluginBus を経由してこのチャットにアクティビティが自動投稿されます。',
+            sender: 'システム',
+            likes: '[]',
+            media_urls: '[]',
             created_at: getOffsetIso(30),
-            deleted_at: null
-          },
-          // Dev messages
-          {
-            id: 'msg-dev-1',
-            thread_id: 'thread-dev-1',
-            content: '新しく業務用SNSプラグインが追加されました。PluginBusを介して、他のプラグインで発生したイベントが「📢 システム通知・アクティビティフィード」へ自動投稿されます。ご確認をお願いします。',
-            sender: '管理者',
-            created_at: getOffsetIso(240),
             deleted_at: null
           }
         ];
 
-        // Batch inserts
         for (const t of defaultThreads) {
           await dbConnection.execute(
             'INSERT INTO sns_threads (id, title, created_by, created_at, updated_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6)',
-            [t.id, t.title, t.created_by, t.created_at, t.updated_at, t.deleted_at]
+            [t.id, t.title, t.created_by, t.created_at, t.updated_at, null]
           );
         }
 
         for (const m of defaultMessages) {
           await dbConnection.execute(
-            'INSERT INTO sns_messages (id, thread_id, content, sender, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6)',
-            [m.id, m.thread_id, m.content, m.sender, m.created_at, m.deleted_at]
+            'INSERT INTO sns_messages (id, thread_id, content, sender, likes, media_urls, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+            [m.id, m.thread_id, m.content, m.sender, m.likes, m.media_urls, m.created_at, null]
           );
         }
       }
     } catch (e) {
-      console.error('Failed to seed default SNS data:', e);
+      console.error('Failed to initialize SNS seed data:', e);
     }
   };
 
-  // Run initial seed and load
   useEffect(() => {
-    const init = async () => {
-      await ensureInitialData();
-      await loadData();
-    };
-    init();
+    loadData();
   }, [dbConnection]);
 
-  // Scroll to bottom on new message
+  // Auto scroll to bottom of chat
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Synchronize on PluginBus event
-  useEffect(() => {
-    const unsubscribeTask = pluginBus.subscribe('personal-ops:task-completed', () => {
-      loadData(selectedThreadId);
-    });
-    const unsubscribeLog = pluginBus.subscribe('personal-ops:work-log-added', () => {
-      loadData(selectedThreadId);
-    });
-
-    return () => {
-      unsubscribeTask();
-      unsubscribeLog();
-    };
-  }, [selectedThreadId]);
-
-  // Sender name save
   const handleSenderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setMessageSender(val);
     localStorage.setItem('basekit_sns_sender', val);
   };
 
-  // Content validation
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setMessageContent(val);
@@ -232,6 +219,55 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
     }
   };
 
+  // Attachments loading
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    if (selectedFiles.length + files.length > 4) {
+      setValidationError('添付できるファイルは最大4個までです。');
+      return;
+    }
+
+    setValidationError(null);
+    const promises = Array.from(files).map(file => {
+      return new Promise<Attachment>((resolve, reject) => {
+        if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+          reject(new Error(`許可されていないファイル形式です: ${file.name}`));
+          return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+          reject(new Error(`ファイルサイズが大きすぎます (最大2MB): ${file.name}`));
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          resolve({
+            name: file.name,
+            type: file.type,
+            data: reader.result as string,
+            size: file.size
+          });
+        };
+        reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました。'));
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(promises)
+      .then(loadedFiles => {
+        setSelectedFiles(prev => [...prev, ...loadedFiles]);
+      })
+      .catch(err => {
+        setValidationError(err.message);
+      });
+  };
+
+  const handleRemoveSelectedFile = (idx: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
   // Create Thread Action
   const handleCreateThread = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,7 +276,7 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
     try {
       const threadId = crypto.randomUUID();
       const nowStr = new Date().toISOString();
-      const sender = '管理者'; // Default thread creator
+      const sender = '管理者';
 
       await dbConnection.execute(
         'INSERT INTO sns_threads (id, title, created_by, created_at, updated_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -250,8 +286,8 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
       // Create initial message
       const msgId = crypto.randomUUID();
       await dbConnection.execute(
-        'INSERT INTO sns_messages (id, thread_id, content, sender, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6)',
-        [msgId, threadId, `スレッド 「${newThreadTitle.trim()}」 が作成されました。`, 'システム', nowStr, null]
+        'INSERT INTO sns_messages (id, thread_id, content, sender, likes, media_urls, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [msgId, threadId, `スレッド 「${newThreadTitle.trim()}」 が作成されました。`, 'システム', '[]', '[]', nowStr, null]
       );
 
       setNewThreadTitle('');
@@ -266,7 +302,11 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
   // Send Message Action
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedThreadId || !messageContent.trim() || !dbConnection) return;
+    if (!selectedThreadId || !dbConnection) return;
+    if (!messageContent.trim() && selectedFiles.length === 0) {
+      setValidationError('メッセージを入力するか、ファイルを添付してください。');
+      return;
+    }
 
     if (messageContent.length > 2000) {
       setValidationError('投稿内容は2000文字以内で入力してください。');
@@ -279,18 +319,29 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
       const sender = messageSender.trim() || 'メンバー';
 
       await dbConnection.execute(
-        'INSERT INTO sns_messages (id, thread_id, content, sender, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6)',
-        [msgId, selectedThreadId, messageContent.trim(), sender, nowStr, null]
+        'INSERT INTO sns_messages (id, thread_id, content, sender, likes, media_urls, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [
+          msgId,
+          selectedThreadId,
+          messageContent.trim(),
+          sender,
+          '[]',
+          JSON.stringify(selectedFiles),
+          nowStr,
+          null
+        ]
       );
 
-      // Also update the thread's updated_at field
+      // Update thread's updated_at
       await dbConnection.execute(
         'UPDATE sns_threads SET updated_at = $1 WHERE id = $2',
         [nowStr, selectedThreadId]
       );
 
       setMessageContent('');
+      setSelectedFiles([]);
       setValidationError(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       await loadData(selectedThreadId);
     } catch (e) {
       console.error('Failed to post message:', e);
@@ -298,14 +349,38 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
     }
   };
 
+  // Likes Reaction Toggle
+  const handleToggleLike = async (msgId: string, currentLikes: string) => {
+    if (!dbConnection || !selectedThreadId) return;
+    try {
+      const likesArray: string[] = currentLikes ? JSON.parse(currentLikes) : [];
+      const myName = messageSender.trim() || 'メンバー';
+      const index = likesArray.indexOf(myName);
+      
+      if (index > -1) {
+        likesArray.splice(index, 1);
+      } else {
+        likesArray.push(myName);
+      }
+
+      await dbConnection.execute(
+        'UPDATE sns_messages SET likes = $1 WHERE id = $2',
+        [JSON.stringify(likesArray), msgId]
+      );
+      await loadData(selectedThreadId);
+    } catch (err) {
+      console.error('Failed to toggle like reaction:', err);
+    }
+  };
+
   // Delete Thread Action
   const handleDeleteThread = async (threadId: string) => {
     if (!dbConnection) return;
     if (threadId === 'thread-sys-feed') {
-      alert('システムフィードスレッドは削除できません。');
+      setValidationError('システムフィードスレッドは削除できません。');
       return;
     }
-    if (!confirm('このスレッドを削除しますか？内のメッセージも非表示になります。')) return;
+    if (!window.confirm('このスレッドを削除しますか？内のメッセージも非表示になります。')) return;
 
     try {
       const nowStr = new Date().toISOString();
@@ -313,7 +388,6 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
         'UPDATE sns_threads SET deleted_at = $1 WHERE id = $2',
         [nowStr, threadId]
       );
-      // Switch selection if needed
       const nextThread = threads.find(t => t.id !== threadId && t.deleted_at == null);
       await loadData(nextThread?.id || null);
     } catch (e) {
@@ -325,7 +399,7 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
   // Delete Message Action
   const handleDeleteMessage = async (msgId: string) => {
     if (!dbConnection || !selectedThreadId) return;
-    if (!confirm('このメッセージを削除しますか？')) return;
+    if (!window.confirm('このメッセージを削除しますか？')) return;
 
     try {
       const nowStr = new Date().toISOString();
@@ -352,6 +426,7 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
 
   return (
     <div style={{ display: 'flex', gap: '24px', flexGrow: 1, minHeight: '500px', height: 'calc(100vh - 220px)' }}>
+      
       {/* Thread list sidebar */}
       <div className="glass-panel" style={{
         width: '320px',
@@ -503,15 +578,6 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
                     🗑️
                   </button>
                 )}
-                {/* CSS snippet to handle button hover effect */}
-                <style>{`
-                  div:hover .delete-thread-btn {
-                    opacity: 0.7 !important;
-                  }
-                  .delete-thread-btn:hover {
-                    color: #ef4444 !important;
-                  }
-                `}</style>
               </div>
             );
           })}
@@ -565,15 +631,6 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
               {loading ? (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#38bdf8', fontSize: '14px' }}>
                   <span className="pulse-text">読み込み中...</span>
-                  <style>{`
-                    @keyframes pulseText {
-                      0%, 100% { opacity: 0.6; }
-                      50% { opacity: 1; }
-                    }
-                    .pulse-text {
-                      animation: pulseText 1.5s infinite ease-in-out;
-                    }
-                  `}</style>
                 </div>
               ) : messages.length === 0 ? (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#6b7280', fontSize: '14px' }}>
@@ -582,6 +639,10 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
               ) : (
                 messages.map((m) => {
                   const isSys = m.sender === 'システム';
+                  const likesArray: string[] = m.likes ? JSON.parse(m.likes) : [];
+                  const isLikedByMe = likesArray.includes(messageSender.trim());
+                  const attachments: Attachment[] = m.media_urls ? JSON.parse(m.media_urls) : [];
+
                   return (
                     <div
                       key={m.id}
@@ -625,37 +686,93 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
                           whiteSpace: 'pre-wrap',
                           wordBreak: 'break-word',
                           textAlign: isSys ? 'center' : 'left',
-                          position: 'relative'
+                          position: 'relative',
+                          width: '100%'
                         }}>
                           {m.content}
+
+                          {/* Render file attachments if any */}
+                          {attachments.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                              {attachments.map((file, fIdx) => (
+                                <div key={fIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  {file.type.startsWith('image/') ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                      <img
+                                        src={file.data}
+                                        alt={file.name}
+                                        style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', objectFit: 'contain', border: '1px solid rgba(255,255,255,0.1)' }}
+                                      />
+                                      <span style={{ fontSize: '10px', color: '#6b7280' }}>📷 {file.name} ({Math.round(file.size / 1024)} KB)</span>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.05)', padding: '6px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                                      <span>📄</span>
+                                      <a href={file.data} download={file.name} style={{ color: '#38bdf8', textDecoration: 'underline', fontWeight: 500 }}>
+                                        {file.name}
+                                      </a>
+                                      <span style={{ color: '#6b7280', fontSize: '10px' }}>({Math.round(file.size / 1024)} KB)</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           
                           {/* Inner timestamp / actions */}
                           <div style={{
                             display: 'flex',
-                            justifyContent: 'flex-end',
+                            justifyContent: 'space-between',
                             alignItems: 'center',
-                            gap: '8px',
+                            gap: '12px',
                             marginTop: '8px',
                             fontSize: '10px',
                             color: '#6b7280'
                           }}>
-                            <span>
-                              {new Date(m.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                            </span>
-                            <button
-                              onClick={() => handleDeleteMessage(m.id)}
-                              style={{
-                                border: 'none',
-                                background: 'transparent',
-                                color: '#6b7280',
-                                cursor: 'pointer',
-                                padding: '2px',
-                                fontSize: '10px'
-                              }}
-                              title="メッセージを削除"
-                            >
-                              🗑️
-                            </button>
+                            {/* Likes section */}
+                            {!isSys ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleLike(m.id, m.likes || '[]')}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: isLikedByMe ? '#ef4444' : '#6b7280',
+                                    cursor: 'pointer',
+                                    fontSize: '11px',
+                                    padding: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '3px'
+                                  }}
+                                  title={likesArray.length > 0 ? `いいねしたメンバー: ${likesArray.join(', ')}` : 'いいね！'}
+                                >
+                                  <span>{isLikedByMe ? '❤️' : '🖤'}</span>
+                                  <span>{likesArray.length}</span>
+                                </button>
+                              </div>
+                            ) : <div></div>}
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>
+                                {new Date(m.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                              <button
+                                onClick={() => handleDeleteMessage(m.id)}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: '#6b7280',
+                                  cursor: 'pointer',
+                                  padding: '2px',
+                                  fontSize: '10px'
+                                }}
+                                title="メッセージを削除"
+                              >
+                                🗑️
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -676,36 +793,92 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
                 flexDirection: 'column',
                 gap: '12px'
               }}>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>投稿者名:</label>
-                    <input
-                      type="text"
-                      value={messageSender}
-                      onChange={handleSenderChange}
-                      required
-                      placeholder="投稿者名..."
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        background: 'rgba(15,23,42,0.8)',
-                        color: '#fff',
-                        fontSize: '12px',
-                        width: '180px'
-                      }}
-                    />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>投稿者名:</label>
+                      <input
+                        type="text"
+                        value={messageSender}
+                        onChange={handleSenderChange}
+                        required
+                        placeholder="投稿者名..."
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          background: 'rgba(15,23,42,0.8)',
+                          color: '#fff',
+                          fontSize: '12px',
+                          width: '180px'
+                        }}
+                      />
+                    </div>
+
+                    {/* File Upload Trigger */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        type="file"
+                        id="sns-file-upload"
+                        multiple
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        style={{ display: 'none' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('sns-file-upload')?.click()}
+                        className="btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <span>📎</span> 添付ファイル
+                      </button>
+                    </div>
                   </div>
-                  {validationError && (
-                    <span style={{ fontSize: '12px', color: '#ef4444', fontWeight: 500 }}>
-                      {validationError}
-                    </span>
-                  )}
+
+                  <span style={{ fontSize: '11px', color: messageContent.length > 2000 ? '#ef4444' : '#6b7280' }}>
+                    {messageContent.length} / 2000 文字
+                  </span>
                 </div>
+
+                {/* Show thumbnails of currently selected files */}
+                {selectedFiles.length > 0 && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', background: 'rgba(255,255,255,0.02)', padding: '8px', borderRadius: '6px' }}>
+                    {selectedFiles.map((file, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        fontSize: '11px'
+                      }}>
+                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '120px' }}>
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSelectedFile(idx)}
+                          style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', fontSize: '10px' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {validationError && (
+                  <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', color: '#ef4444', fontSize: '12px' }}>
+                    ⚠️ {validationError}
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <textarea
-                    placeholder="メッセージを入力してください...（Shift + Enterで送信。最大2000字）"
+                    placeholder="メッセージを入力してください...（Shift + Enterで改行。最大2000字）"
                     value={messageContent}
                     onChange={handleContentChange}
                     onKeyDown={(e) => {
@@ -714,7 +887,6 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
                         handleSendMessage(e);
                       }
                     }}
-                    required
                     style={{
                       flexGrow: 1,
                       minHeight: '60px',

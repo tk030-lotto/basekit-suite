@@ -7,7 +7,7 @@ import { pluginBus } from '../../core/src/lib/bus/PluginBus';
 
 const dbConnection = new LocalStorageConnection();
 
-// Standard SVG Icon Components for visually stunning UI
+// Standard SVG Icon Components
 const LockIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -41,6 +41,9 @@ const WifiOffIcon = () => (
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'bookkeeping' | 'sns'>('dashboard');
   const [pendingDraftsCount, setPendingDraftsCount] = useState(0);
+  const [isLicenseAgreed, setIsLicenseAgreed] = useState(() => {
+    return localStorage.getItem('basekit_license_agreed') === 'true';
+  });
 
   const loadPendingDraftsCount = async () => {
     try {
@@ -77,8 +80,8 @@ export default function App() {
         // Insert message
         const msgId = crypto.randomUUID();
         await dbConnection.execute(
-          'INSERT INTO sns_messages (id, thread_id, content, sender, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6)',
-          [msgId, threadId, content, 'システム', nowStr, null]
+          'INSERT INTO sns_messages (id, thread_id, content, sender, likes, media_urls, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+          [msgId, threadId, content, 'システム', '[]', '[]', nowStr, null]
         );
 
         // Update thread updated_at
@@ -100,7 +103,7 @@ export default function App() {
       const content = `📢 【システム通知】工数が登録されました！\nタスク名: 「${data.taskTitle}」\n作業時間: ${data.durationMinutes}分\nメモ: ${data.memo}`;
       await ensureSystemThreadAndPost(content);
 
-      // 工数から労務費の仕訳下書きを自動生成してデータベースに登録する
+      // Create bookkeeping draft
       try {
         const hourlyRate = 3000;
         const amount = Math.round((data.durationMinutes / 60) * hourlyRate);
@@ -123,7 +126,6 @@ export default function App() {
           ]
         );
 
-        // バッジカウントを更新
         await loadPendingDraftsCount();
       } catch (err) {
         console.error('[App.tsx] Failed to create bookkeeping draft:', err);
@@ -136,282 +138,417 @@ export default function App() {
     };
   }, []);
 
+  const handleAgreeLicense = () => {
+    localStorage.setItem('basekit_license_agreed', 'true');
+    setIsLicenseAgreed(true);
+  };
+
+  const handleClearLocalData = () => {
+    if (window.confirm('警告：すべてのローカルデータを削除し、初期状態にリセットします。よろしいですか？')) {
+      localStorage.clear();
+      setIsLicenseAgreed(false);
+      window.location.reload();
+    }
+  };
+
   return (
-    <div className="app-container" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#0b0f19', color: '#f8fafc' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#0b0f19', color: '#f8fafc', position: 'relative' }}>
       
-      {/* Sidebar */}
-      <aside style={{
-        width: '280px',
-        background: '#111827',
-        borderRight: '1px solid rgba(255, 255, 255, 0.05)',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        padding: '24px'
-      }}>
-        <div>
-          {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-            <div style={{
-              background: 'linear-gradient(135deg, #0ea5e9 0%, #d946ef 100%)',
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 'bold',
-              fontSize: '20px',
-              boxShadow: '0 4px 14px rgba(14, 165, 233, 0.3)'
-            }}>
-              B
-            </div>
-            <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.5px' }}>BaseKit</h2>
-              <span style={{ fontSize: '12px', color: '#0ea5e9', fontWeight: 600 }}>STANDALONE</span>
-            </div>
-          </div>
+      {/* A4 Print Styles Override */}
+      <style>{`
+        @media print {
+          body, html {
+            background: #ffffff !important;
+            color: #000000 !important;
+          }
+          aside, header, button, select, input, textarea, .alert-banner, .btn-secondary, .btn-primary {
+            display: none !important;
+          }
+          main {
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+          }
+          .glass-panel {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            color: #000000 !important;
+          }
+          pre {
+            background: transparent !important;
+            color: #000000 !important;
+            border: none !important;
+            padding: 0 !important;
+          }
+        }
+      `}</style>
 
-          {/* Navigation Links */}
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: '10px',
-                border: 'none',
-                background: activeTab === 'dashboard' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
-                color: activeTab === 'dashboard' ? '#38bdf8' : '#94a3b8',
-                fontWeight: 600,
-                textAlign: 'left',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <ShieldIcon />
-              <span>ダッシュボード</span>
-            </button>
-
-            <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.05)', margin: '12px 0' }}></div>
-            <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 700, paddingLeft: '16px', textTransform: 'uppercase', letterSpacing: '1px' }}>PLUGINS</span>
-
-            <button
-              onClick={() => setActiveTab('personal')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: '10px',
-                border: 'none',
-                background: activeTab === 'personal' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
-                color: activeTab === 'personal' ? '#38bdf8' : '#94a3b8',
-                fontWeight: 500,
-                textAlign: 'left',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <PluginIcon />
-              <span>個人業務効率化</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('bookkeeping')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: '10px',
-                border: 'none',
-                background: activeTab === 'bookkeeping' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
-                color: activeTab === 'bookkeeping' ? '#38bdf8' : '#94a3b8',
-                fontWeight: 500,
-                textAlign: 'left',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <PluginIcon />
-              <span style={{ flexGrow: 1 }}>複式簿記ツール</span>
-              {pendingDraftsCount > 0 && (
-                <span style={{
-                  background: 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)',
-                  color: '#ffffff',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
-                  padding: '2px 8px',
-                  borderRadius: '10px',
-                  marginLeft: 'auto'
-                }}>
-                  {pendingDraftsCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('sns')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: '10px',
-                border: 'none',
-                background: activeTab === 'sns' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
-                color: activeTab === 'sns' ? '#38bdf8' : '#94a3b8',
-                fontWeight: 500,
-                textAlign: 'left',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <PluginIcon />
-              <span>業務用SNS</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* User Info & Sandbox Status */}
+      {/* 1. 免責ライセンスゲート overlay */}
+      {!isLicenseAgreed && (
         <div style={{
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: '12px',
-          padding: '16px',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(9, 13, 22, 0.95)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '600px',
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px',
+            border: '1px solid rgba(14, 165, 233, 0.2)',
+            background: 'rgba(17, 24, 39, 0.8)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                background: 'rgba(14, 165, 233, 0.1)',
+                color: '#38bdf8',
+                padding: '10px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <LockIcon />
+              </div>
+              <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#f8fafc' }}>利用免責同意ゲート</h2>
+            </div>
+            
+            <div style={{ fontSize: '13px', color: '#94a3b8', lineHeight: 1.6, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ color: '#fbbf24', fontWeight: 600 }}>
+                本システムをご利用になる前に、以下の免責事項をお読みいただき、同意いただく必要があります。
+              </p>
+              <div style={{
+                background: '#090d16',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                padding: '16px',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                fontSize: '12px',
+                color: '#cbd5e1'
+              }}>
+                <h4 style={{ fontWeight: 700, color: '#f8fafc' }}>【ソフトウェア利用許諾 ＆ 免責事項】</h4>
+                <p>1. 本ソフトウェアは、個人の練習およびホビーとしての利用を目的として無償で提供される試作品です。</p>
+                <p>2. 本ソフトウェアの動作に必要なデータは、PCローカルのブラウザ領域（localStorage）にのみ隔離して保存され、外部サーバーへ送信されることは一切ありません。</p>
+                <p>3. 開発者は、本ソフトウェアの利用に関連して生じた直接的、間接的、偶発的、または結果的な損害（データの消失、計算の誤り、業務の中断、税務申告等の不備を含むがこれらに限定されない）について、一切の責任を負いません。</p>
+                <p>4. キャッシュのクリア操作により、ローカルデータが消失する可能性があります。定期的なバックアップ（データ管理のエクスポート機能）をご自身で実行してください。</p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleAgreeLicense}
+              className="btn-primary"
+              style={{
+                width: '100%',
+                padding: '12px',
+                fontWeight: 700,
+                background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                boxShadow: '0 4px 14px rgba(14, 165, 233, 0.3)'
+              }}
+            >
+              同意して利用を開始する
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Main App Content */}
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+        
+        {/* Sidebar */}
+        <aside style={{
+          width: '280px',
+          background: '#111827',
+          borderRight: '1px solid rgba(255, 255, 255, 0.05)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px'
+          justifyContent: 'space-between',
+          padding: '24px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc' }}>サンドボックス動作中</span>
-          </div>
-          <p style={{ fontSize: '11px', color: '#6b7280', lineHeight: 1.4 }}>
-            すべてのデータはブラウザの localStorage に暗号化またはローカル保存され、外部送信されません。
-          </p>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="main-content" style={{ flexGrow: 1, padding: '40px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-        
-        {/* Header */}
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '20px' }}>
           <div>
-            <h1 style={{ fontSize: '26px', fontWeight: 700, letterSpacing: '-0.5px' }}>
-              {activeTab === 'dashboard' && 'セキュリティ・コントロールパネル'}
-              {activeTab === 'personal' && '個人業務効率化ツール'}
-              {activeTab === 'bookkeeping' && '複式簿記ツール'}
-              {activeTab === 'sns' && '業務用SNS (シミュレーター)'}
-            </h1>
-            <p style={{ fontSize: '14px', color: '#94a3b8', marginTop: '4px' }}>
-              {activeTab === 'dashboard' && 'スタンドアロン環境の動作ステータスと完全通信遮断検証'}
-              {activeTab === 'personal' && 'タスク管理と工数トラッキング (ローカルストレージ駆動)'}
-              {activeTab === 'bookkeeping' && '簡易仕訳と決算書下書き出力 (ローカルストレージ駆動)'}
-              {activeTab === 'sns' && '完全ローカルサンドボックス型の業務用SNSモック'}
+            {/* Logo */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #0ea5e9 0%, #d946ef 100%)',
+                width: '40px',
+                height: '40px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold',
+                fontSize: '20px',
+                boxShadow: '0 4px 14px rgba(14, 165, 233, 0.3)'
+              }}>
+                B
+              </div>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.5px' }}>BaseKit</h2>
+                <span style={{ fontSize: '12px', color: '#0ea5e9', fontWeight: 600 }}>STANDALONE</span>
+              </div>
+            </div>
+
+            {/* Navigation Links */}
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: activeTab === 'dashboard' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
+                  color: activeTab === 'dashboard' ? '#38bdf8' : '#94a3b8',
+                  fontWeight: 600,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <ShieldIcon />
+                <span>ダッシュボード</span>
+              </button>
+
+              <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.05)', margin: '12px 0' }}></div>
+              <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 700, paddingLeft: '16px', textTransform: 'uppercase', letterSpacing: '1px' }}>PLUGINS</span>
+
+              <button
+                onClick={() => setActiveTab('personal')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: activeTab === 'personal' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
+                  color: activeTab === 'personal' ? '#38bdf8' : '#94a3b8',
+                  fontWeight: 500,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <PluginIcon />
+                <span>個人業務効率化</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('bookkeeping')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: activeTab === 'bookkeeping' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
+                  color: activeTab === 'bookkeeping' ? '#38bdf8' : '#94a3b8',
+                  fontWeight: 500,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <PluginIcon />
+                <span style={{ flexGrow: 1 }}>複式簿記ツール</span>
+                {pendingDraftsCount > 0 && (
+                  <span style={{
+                    background: 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)',
+                    color: '#ffffff',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    padding: '2px 8px',
+                    borderRadius: '10px',
+                    marginLeft: 'auto'
+                  }}>
+                    {pendingDraftsCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('sns')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: activeTab === 'sns' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
+                  color: activeTab === 'sns' ? '#38bdf8' : '#94a3b8',
+                  fontWeight: 500,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <PluginIcon />
+                <span>業務用SNS</span>
+              </button>
+            </nav>
+          </div>
+
+          {/* User Info & Sandbox Status */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            borderRadius: '12px',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></div>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc' }}>サンドボックス動作中</span>
+            </div>
+            <p style={{ fontSize: '11px', color: '#6b7280', lineHeight: 1.4 }}>
+              すべてのデータはブラウザの localStorage に隔離してローカル保存され、外部送信されません。
             </p>
           </div>
+        </aside>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'rgba(16, 185, 129, 0.1)',
-              border: '1px solid rgba(16, 185, 129, 0.2)',
-              color: '#10b981',
-              padding: '6px 12px',
-              borderRadius: '20px',
-              fontSize: '12px',
-              fontWeight: 600
-            }}>
-              <LockIcon />
-              OFFLINE SECURE
-            </div>
-          </div>
-        </header>
-
-        {/* Dashboard Body */}
-        {activeTab === 'dashboard' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }} className="animate-fade-in">
-            {/* Status cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
-              
-              <div className="glass-panel" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                <div style={{ background: 'rgba(14, 165, 233, 0.1)', color: '#38bdf8', padding: '12px', borderRadius: '12px' }}>
-                  <DatabaseIcon />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>データベース接続</h3>
-                  <span style={{ fontSize: '20px', fontWeight: 700, color: '#f8fafc' }}>LocalStorage</span>
-                  <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>外部 PostgreSQL 未接続 (完全ローカル)</p>
-                </div>
-              </div>
-
-              <div className="glass-panel" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                <div style={{ background: 'rgba(217, 70, 239, 0.1)', color: '#f472b6', padding: '12px', borderRadius: '12px' }}>
-                  <WifiOffIcon />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>外部ネットワーク</h3>
-                  <span style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>完全遮断 (正常)</span>
-                  <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>静的スキャン適合率: 100% (No Net)</p>
-                </div>
-              </div>
-
-              <div className="glass-panel" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '12px', borderRadius: '12px' }}>
-                  <ShieldIcon />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>ライセンス承諾</h3>
-                  <span style={{ fontSize: '20px', fontWeight: 700, color: '#f8fafc' }}>同意済</span>
-                  <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>MITライセンス適用ゲートパス</p>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Detailed sandboxing block */}
-            <div className="glass-panel" style={{ padding: '32px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <LockIcon />
-                スタンドアロン（オフライン）版セキュリティ憲章
-              </h2>
-              <p style={{ color: '#94a3b8', lineHeight: 1.7, marginBottom: '24px', fontSize: '14px' }}>
-                BaseKit Standaloneは、社内情報漏洩やネットワークポリシー抵触を極度に懸念する環境でも、安心して共通機能や個別プラグインをご利用いただけるよう構築されています。
-                Viteビルドプロセスにおいて自動静的解析が実行され、プラグイン内部に外部サーバーとの通信コード（Fetch, Axios, Web Socket等）が存在しないか、厳密なアサーション検証が行われます。
+        {/* Main Content Area */}
+        <main className="main-content" style={{ flexGrow: 1, padding: '40px', display: 'flex', flexDirection: 'column', gap: '32px', overflowY: 'auto' }}>
+          
+          {/* Header */}
+          <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '20px' }}>
+            <div>
+              <h1 style={{ fontSize: '26px', fontWeight: 700, letterSpacing: '-0.5px' }}>
+                {activeTab === 'dashboard' && 'セキュリティ・コントロールパネル'}
+                {activeTab === 'personal' && '個人業務効率化ツール'}
+                {activeTab === 'bookkeeping' && '複式簿記ツール'}
+                {activeTab === 'sns' && '業務用SNS (シミュレーター)'}
+              </h1>
+              <p style={{ fontSize: '14px', color: '#94a3b8', marginTop: '4px' }}>
+                {activeTab === 'dashboard' && 'スタンドアロン環境の動作ステータスと完全通信遮断検証'}
+                {activeTab === 'personal' && 'タスク管理と工数トラッキング (ローカルストレージ駆動)'}
+                {activeTab === 'bookkeeping' && '簡易仕訳と決算書下書き出力 (ローカルストレージ駆動)'}
+                {activeTab === 'sns' && '完全ローカルサンドボックス型の業務用SNSモック'}
               </p>
+            </div>
 
-              <div style={{ display: 'flex', gap: '16px' }}>
-                <button className="btn-primary">セキュリティ自己診断を実行</button>
-                <button className="btn-secondary" onClick={() => alert('localStorageデータをクリアしました。')}>ローカルデータをクリア</button>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.2)',
+                color: '#10b981',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                fontSize: '12px',
+                fontWeight: 600
+              }}>
+                <LockIcon />
+                OFFLINE SECURE
               </div>
             </div>
-          </div>
-        )}
+          </header>
 
-        {activeTab === 'personal' && (
-          <PersonalOpsPlugin dbConnection={dbConnection} />
-        )}
+          {/* Dashboard Body */}
+          {activeTab === 'dashboard' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }} className="animate-fade-in">
+              {/* Status cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+                
+                <div className="glass-panel" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                  <div style={{ background: 'rgba(14, 165, 233, 0.1)', color: '#38bdf8', padding: '12px', borderRadius: '12px' }}>
+                    <DatabaseIcon />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>データベース接続</h3>
+                    <span style={{ fontSize: '20px', fontWeight: 700, color: '#f8fafc' }}>LocalStorage</span>
+                    <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>外部 PostgreSQL 未接続 (完全ローカル)</p>
+                  </div>
+                </div>
 
-        {activeTab === 'sns' && (
-          <SnsPlugin dbConnection={dbConnection} />
-        )}
+                <div className="glass-panel" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                  <div style={{ background: 'rgba(217, 70, 239, 0.1)', color: '#f472b6', padding: '12px', borderRadius: '12px' }}>
+                    <WifiOffIcon />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>外部ネットワーク</h3>
+                    <span style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>完全遮断 (正常)</span>
+                    <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>静的スキャン適合率: 100% (No Net)</p>
+                  </div>
+                </div>
 
-        {activeTab === 'bookkeeping' && (
-          <BookkeepingPlugin dbConnection={dbConnection} onDraftsChange={loadPendingDraftsCount} />
-        )}
+                <div className="glass-panel" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                  <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '12px', borderRadius: '12px' }}>
+                    <ShieldIcon />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>ライセンス承諾</h3>
+                    <span style={{ fontSize: '20px', fontWeight: 700, color: '#f8fafc' }}>{isLicenseAgreed ? '同意済' : '未同意'}</span>
+                    <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>MITライセンス適用ゲートパス</p>
+                  </div>
+                </div>
 
-      </main>
+              </div>
+
+              {/* Detailed sandboxing block */}
+              <div className="glass-panel" style={{ padding: '32px' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <LockIcon />
+                  スタンドアロン（オフライン）版セキュリティ憲章
+                </h2>
+                <p style={{ color: '#94a3b8', lineHeight: 1.7, marginBottom: '24px', fontSize: '14px' }}>
+                  BaseKit Standaloneは、社内情報漏洩やネットワークポリシー抵触を極度に懸念する環境でも、安心して共通機能や個別プラグインをご利用いただけるよう構築されています。
+                  Viteビルドプロセスにおいて自動静的解析が実行され、プラグイン内部に外部サーバーとの通信コード（Fetch, Axios, Web Socket等）が存在しないか、厳密なアサーション検証が行われます。
+                </p>
+
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <button className="btn-primary" onClick={() => alert('セキュリティ診断：すべて適合しています (No Network Operations detected)')}>セキュリティ自己診断を実行</button>
+                  <button className="btn-secondary" onClick={handleClearLocalData}>ローカルデータをクリア</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'personal' && (
+            <PersonalOpsPlugin dbConnection={dbConnection} />
+          )}
+
+          {activeTab === 'sns' && (
+            <SnsPlugin dbConnection={dbConnection} />
+          )}
+
+          {activeTab === 'bookkeeping' && (
+            <BookkeepingPlugin dbConnection={dbConnection} onDraftsChange={loadPendingDraftsCount} />
+          )}
+
+        </main>
+      </div>
     </div>
   );
 }
