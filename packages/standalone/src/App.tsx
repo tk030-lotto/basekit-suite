@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import PersonalOpsPlugin from '@basekit/plugin-personal-ops';
 import SnsPlugin from '@basekit/plugin-sns';
+import BookkeepingPlugin from '@basekit/plugin-bookkeeping';
 import { LocalStorageConnection } from './lib/db/LocalStorageConnection';
 import { pluginBus } from '../../core/src/lib/bus/PluginBus';
 
@@ -39,8 +40,22 @@ const WifiOffIcon = () => (
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'bookkeeping' | 'sns'>('dashboard');
+  const [pendingDraftsCount, setPendingDraftsCount] = useState(0);
+
+  const loadPendingDraftsCount = async () => {
+    try {
+      const drafts = await dbConnection.query(
+        'SELECT * FROM bookkeeping_drafts WHERE deleted_at IS NULL'
+      );
+      setPendingDraftsCount(drafts ? drafts.length : 0);
+    } catch (e) {
+      console.error('[App.tsx] Failed to load pending drafts count:', e);
+    }
+  };
 
   useEffect(() => {
+    loadPendingDraftsCount();
+
     const ensureSystemThreadAndPost = async (content: string) => {
       try {
         const threadId = 'thread-sys-feed';
@@ -84,6 +99,35 @@ export default function App() {
     const unsubscribeLog = pluginBus.subscribe('personal-ops:work-log-added', async (data) => {
       const content = `📢 【システム通知】工数が登録されました！\nタスク名: 「${data.taskTitle}」\n作業時間: ${data.durationMinutes}分\nメモ: ${data.memo}`;
       await ensureSystemThreadAndPost(content);
+
+      // 工数から労務費の仕訳下書きを自動生成してデータベースに登録する
+      try {
+        const hourlyRate = 3000;
+        const amount = Math.round((data.durationMinutes / 60) * hourlyRate);
+        const draftId = crypto.randomUUID();
+        const nowStr = new Date().toISOString();
+        const workDate = data.workDate || nowStr.substring(0, 10);
+
+        await dbConnection.execute(
+          'INSERT INTO bookkeeping_drafts (id, entry_date, description, debit_account, debit_amount, credit_account, credit_amount, created_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+          [
+            draftId,
+            workDate,
+            `【工数連携】${data.taskTitle} (${data.durationMinutes}分)`,
+            '労務費',
+            amount,
+            '未払費用',
+            amount,
+            nowStr,
+            null
+          ]
+        );
+
+        // バッジカウントを更新
+        await loadPendingDraftsCount();
+      } catch (err) {
+        console.error('[App.tsx] Failed to create bookkeeping draft:', err);
+      }
     });
 
     return () => {
@@ -196,7 +240,20 @@ export default function App() {
               }}
             >
               <PluginIcon />
-              <span>複式簿記ツール</span>
+              <span style={{ flexGrow: 1 }}>複式簿記ツール</span>
+              {pendingDraftsCount > 0 && (
+                <span style={{
+                  background: 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)',
+                  color: '#ffffff',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  padding: '2px 8px',
+                  borderRadius: '10px',
+                  marginLeft: 'auto'
+                }}>
+                  {pendingDraftsCount}
+                </span>
+              )}
             </button>
 
             <button
@@ -351,14 +408,7 @@ export default function App() {
         )}
 
         {activeTab === 'bookkeeping' && (
-          <div className="glass-panel animate-fade-in" style={{ padding: '40px', textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚙️</div>
-            <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '12px' }}>準備中 (ステップ3-2 以降で接続予定)</h2>
-            <p style={{ color: '#94a3b8', fontSize: '14px', maxWidth: '500px', margin: '0 auto 24px', lineHeight: 1.6 }}>
-              現在、ステップ3-1「Vite環境の初期化」が実行されています。ステップ3-2で「LocalStorage対応データベースドライバー」をプラグインへ結線し、完全なデータ読み書き機能を提供します。
-            </p>
-            <button className="btn-secondary" onClick={() => setActiveTab('dashboard')}>ダッシュボードへ戻る</button>
-          </div>
+          <BookkeepingPlugin dbConnection={dbConnection} onDraftsChange={loadPendingDraftsCount} />
         )}
 
       </main>
