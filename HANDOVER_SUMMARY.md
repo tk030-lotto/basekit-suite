@@ -1,71 +1,49 @@
-# BaseKit Suite 開発引き継ぎサマリー (2026-07-15 - P2-3完了)
+# BaseKit Suite 開発引き継ぎサマリー (2026-07-15 - P2-5完了)
 
-本ドキュメントは、プロジェクト「BaseKit Suite」のフェーズ2「コア再構築」におけるステップ2-3「データベース抽象化レイヤー（マルチDB接続）」完了時点での状況、システム構成、および次回開始時のタスクをまとめた引き継ぎ書である。
+本ドキュメントは、プロジェクト「BaseKit Suite」のフェーズ2「コア再構築」におけるステップ2-5「免責ゲート ＆ 操作ログトリガーの設定」完了時点での状況、システム構成、および次回開始時のタスクをまとめた引き継ぎ書である。
 
 ---
 
 ## 1. プロジェクト基本情報
 *   **プロジェクト名**: BaseKit Suite
 *   **プロジェクトディレクトリ**: `c:\Users\tk030\Desktop\basekit-suite`
-*   **現在の進捗**: フェーズ2-3「データベース抽象化レイヤー（マルチDB接続）」完了。全体進捗率 50%。
+*   **現在の進捗**: フェーズ2-5「免責ゲート ＆ 操作ログトリガーの設定」完了。全体進捗率 62%。
 *   **開発計画書**: プロジェクトルートの `DEVELOPMENT_PLAN.md` に最新のマイルストーン工程表が設置済。
 *   **開発実績記録**: `各種情報\Projects\BaseKit_Suite\RECORD.md` に各フェーズの完了履歴が記載済。
 
 ---
 
-## 2. 物理フォルダ構成と主要モジュール
-`npm workspaces` を採用したモノレポ物理構成：
-
-```plaintext
-basekit-suite/
-├── packages/
-│   ├── core/                       # ① Coreパッケージ (Next.js Webポータル基盤)
-│   │   ├── src/
-│   │   │   ├── app/
-│   │   │   │   ├── api/
-│   │   │   │   │   ├── ai/
-│   │   │   │   │   │   └── route.ts  # AIプロキシエンドポイント (Ollama等のCORS回避用)
-│   │   │   │   │   └── db/
-│   │   │   │   │       └── route.ts  # DBプロキシエンドポイント (PostgreSQL等のCORS回避用)
-│   │   │   │   ├── settings/
-│   │   │   │   │   └── page.tsx      # システム設定画面 (AI/DB切り替えと接続疎通テスト)
-│   │   │   │   └── page.tsx          # ダッシュボードポータル
-│   │   │   ├── lib/
-│   │   │   │   ├── ai/
-│   │   │   │   │   ├── LLMProviderFactory.ts
-│   │   │   │   │   ├── GeminiLLMProvider.ts
-│   │   │   │   │   └── OllamaLLMProvider.ts
-│   │   │   │   └── db/
-│   │   │   │       └── DatabaseManager.ts # DB接続マネージャー (LocalStorage/Mock/Postgres動的切り替え)
-│   │   │   └── types/
-│   │   │       └── index.ts          # コアインターフェース・型定義
-│   ├── standalone/                 # ② スタンドアロンパッケージ (ViteプレーンHTML/JS。社用PC用)
-│   └── plugins/
-│       ├── personal-ops/           # ③ 個人業務効率化プラグイン (スケルトン)
-│       ├── bookkeeping/            # ④ 複式簿記プラグイン (スケルトン)
-│       └── sns/                    # ⑤ 業務用SNSプラグイン (スケルトン)
-└── DEVELOPMENT_PLAN.md             # 統合開発計画書・工程管理表
-```
+## 2. 今回完了した事項 (Done)
+*   **免責同意ゲートのCookie連動とMiddleware一括遮断の導入**:
+    *   クライアントサイドの `localStorage` 判定から、Cookie `basekit_disclaimer_accepted`（有効期限1年）を用いた判定に移行しました。
+    *   `packages/core/src/middleware.ts` にて、未同意アクセスを検知して同意画面 `/disclaimer` へ強制リダイレクトする一括遮断制御を追加しました。また、同意済みユーザーが直接 `/disclaimer` にアクセスした際は `/` にリダイレクトします。
+    *   規約合意画面として `packages/core/src/app/disclaimer/page.tsx` を新規実装し、旧 `DisclaimerGate.tsx` を物理削除・廃止しました。
+    *   `Header.tsx` の「免責再表示」ボタン押下時に、Cookieも併せて即時削除するよう拡張しました。
+*   **データベース自動監査ログ ＆ トリガー機能の実装（論理削除自動判定）**:
+    *   `packages/core/src/lib/db/postgresSetup.ts` を新規追加し、PostgreSQL接続時に `audit_logs` テーブル、トリガー関数、全テーブルへのトリガー紐付けを自動アタッチする PL/pgSQL スクリプトを構築しました。
+    *   トリガー関数内で `UPDATE` 時に `deleted_at` カラムが `NULL` から `非NULL`（タイムスタンプ）に移行したかを `to_jsonb()` を用いて安全に検知し、アクション名を `DELETE (LOGICAL)` として自動分類・追跡記録するロジックを実装しました。
+    *   `DatabaseManager.ts` の `LocalStorageConnection` および `MockPostgresConnection` を拡張し、`UPDATE` SQLの検知と `deleted_at` 変化時の `DELETE (LOGICAL)` 監査ロギングを実装しました。
+    *   API中継プロキシ（`route.ts`）および直接接続（`DatabaseManager.ts` の `PostgreSqlConnection`）の初期化プロセスに自動初期化スクリプトを統合しました。
+*   **統合ビルド検証およびコミット**:
+    *   `npm run build -w @basekit/core` が警告・エラーなしで正常ビルドされることを確認し、Gitへコミットしました。
 
 ---
 
-## 3. 合意された「自己防衛」および「マルチDB」設計思想
-
-### ① 「0円運用」と「自律データベース」の原則
-*   **AIプロバイダの切り替え**: Google Gemini（個人の無料APIキー）とローカルLLMサーバー（Ollama）を、設定画面からノーコードで切り替えて利用可能。
-*   **マルチDB接続抽象化**: 
-    1.  `LocalStorage`: 完全ブラウザ内完結のプライベートかつ無料の運用。
-    2.  `Mock PostgreSQL`: サーバーを持たずにRDB（SQL）クエリやDDL動作をブラウザ内でシミュレートし、LocalStorageで永続化。
-    3.  `PostgreSQL`: Supabase（無料枠あり）やローカルのPostgreSQLサーバーに直接/プロキシ経由で接続し、本格的なRDB運用が可能。
-
-### ② データベースCORS回避・認証情報秘匿プロキシ
-*   ブラウザ側から外部PostgreSQLへTCPソケットを直接繋ぐことができないCORS/セキュリティの制限を回避するため、Next.js APIルート `/api/db` を経由したプロキシ通信を構築。
-*   設定画面で入力されたホストやユーザー名、パスワード等の接続パラメータを安全にサーバー側へ引き渡し、サーバー側で `pg` クライアントを用いて疎通確認（接続テスト）やクエリを実行する。
+## 3. 現在のコード状態 (Current State)
+*   **リポジトリ**: すべての変更が最新コミット（`feat: P2-5 免責ゲートのCookie連動/Middleware一括遮断およびデータベース自動監査ログ（論理削除自動判定）機能の実装`）でマージされたクリーンな状態です。
+*   **免責ゲートの挙動**: 初回アクセス時、同意Cookieがない場合は問答無用で `/disclaimer` に飛ばされます。同意するとCookieがセットされてポータルが利用可能になり、ヘッダーの「免責再表示」で再度リセット可能です。
+*   **監査ログの挙動**: データベースの追加・更新・削除・論理削除時に、LocalStorage/PostgreSQLの `audit_logs` テーブルへ自動的に差分ログが蓄積されます。
 
 ---
 
-## 4. 次回開始時のタスク
-統合開発計画書（[DEVELOPMENT_PLAN.md](file:///c:/Users/tk030/Desktop/basekit-suite/DEVELOPMENT_PLAN.md)）の「**P2: コア再構築 - ステップ2-4: 認証トグル（ログインバイパス）機能の実装**」より開始する。
+## 4. 次回開始時のタスク (Next Task)
+統合開発計画書（`DEVELOPMENT_PLAN.md`）の「**P3: スタンドアロン - ステップ3-1: スタンドアロンパッケージVite環境の初期化**」より開始する。
 
-1.  ローカル開発や個人利用時に、ログイン画面をスキップして即座に画面へログインできるトグルスイッチを設定画面または環境変数に追加・実装する。
-2.  バイパス有効時にダミーの管理者（ADMIN）セッションコンテキストを生成し、システム全体に配るセキュリティバイパス制御の仕組みを `middleware.ts` または認証プロバイダ内に組み込む。
+1.  `packages/standalone/` ディレクトリ配下に Vite + React（TypeScript）環境を新規構成する。
+2.  モノレポのルート `package.json` の workspaces 依存や、共通コアから独立した完全ローカルなモジュール構成を準備する。
+
+### 📌 将来のプラグイン（SNS）実装時の重要注意事項
+*   **対象**: 「P4-2: 業務用SNSプラグイン」の実装時
+*   **参照フォルダ**: `C:\Users\tk030\Desktop\アクティブ\business_sns_kit_release`
+*   **指示要件**: 
+    移植にあたっては、上記フォルダ内のソースコードを参照し、同フォルダ内の **`FIX_PLAN.md`（本番リリース修正計画）** に基づいたセキュリティ修正やコード整理が適用された（あるいは移植時に適用する）状態で統合パッケージに組み込むこと。
