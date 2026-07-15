@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 
 export default function Header() {
   const isAuthBypassed = process.env.NEXT_PUBLIC_DISABLE_AUTH !== 'false';
@@ -43,6 +44,30 @@ export default function Header() {
             🔑 AUTH BYPASS (ADMIN)
           </span>
         )}
+
+        <Link
+          href="/settings"
+          style={{
+            fontSize: '12px',
+            backgroundColor: 'transparent',
+            color: '#cbd5e1',
+            border: '1px solid #334155',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            transition: 'var(--transition-smooth)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'var(--primary)';
+            e.currentTarget.style.borderColor = 'var(--primary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = '#cbd5e1';
+            e.currentTarget.style.borderColor = '#334155';
+          }}
+        >
+          ⚙️ 設定
+        </Link>
 
         <button
           onClick={resetConsent}

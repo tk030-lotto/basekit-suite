@@ -8,15 +8,30 @@ export default function DashboardPage() {
   const [dbMode, setDbMode] = useState<string>('Loading...');
   const [aiStatus, setAiStatus] = useState<string>('Not Configured');
 
-  useEffect(() => {
-    // Check DB environment
+  const updateAiStatus = () => {
     if (typeof window !== 'undefined') {
+      const provider = localStorage.getItem('basekit_ai_provider') || 'gemini';
+      if (provider === 'ollama') {
+        const model = localStorage.getItem('OLLAMA_MODEL') || 'llama3';
+        setAiStatus(`Ollama (${model})`);
+      } else {
+        const hasKey = !!localStorage.getItem('GEMINI_API_KEY');
+        setAiStatus(hasKey ? 'Gemini 1.5 Flash (Active)' : 'Gemini 1.5 Flash (Key Not Set)');
+      }
+      
       const connType = localStorage.getItem('basekit_db_type') || 'LocalStorage (Browser)';
       setDbMode(connType);
-      
-      const hasKey = !!localStorage.getItem('GEMINI_API_KEY');
-      setAiStatus(hasKey ? 'Gemini 1.5 Flash (Active)' : 'Gemini 1.5 Flash (Key Not Set)');
     }
+  };
+
+  useEffect(() => {
+    updateAiStatus();
+    
+    // Listen for custom settings storage events
+    window.addEventListener('storage', updateAiStatus);
+    return () => {
+      window.removeEventListener('storage', updateAiStatus);
+    };
   }, []);
 
   return (

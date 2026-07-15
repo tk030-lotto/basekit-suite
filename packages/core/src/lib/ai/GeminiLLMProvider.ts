@@ -10,6 +10,37 @@ export class GeminiLLMProvider implements ILLMProvider {
 
   async generateText(prompt: string, options?: any): Promise<string> {
     const apiKey = this.getApiKey();
+
+    if (typeof window !== 'undefined') {
+      try {
+        const response = await fetch('/api/ai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            provider: 'gemini',
+            prompt,
+            options,
+            config: {
+              geminiApiKey: apiKey
+            }
+          }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.text;
+      } catch (err: any) {
+        console.error('[GeminiLLMProvider] Proxy Error:', err);
+        return `Failed to generate text (Proxy): ${err.message}`;
+      }
+    }
+
     if (!apiKey) {
       return "Error: Gemini API Key is not set. Please set GEMINI_API_KEY in your environment or Settings panel.";
     }
