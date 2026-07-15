@@ -19,7 +19,7 @@
 | | 2-3 | データベース抽象化レイヤー（マルチDB接続） | `packages/core/src/lib/db/` | **[完了]** | AI |
 | | 2-4 | 認証トグル（ログインバイパス）機能 | `packages/core/src/middleware.ts` | **[完了]** | AI |
 | | 2-5 | 免責ゲート ＆ 操作ログトリガーの設定 | `packages/core/` | **[完了]** | AI |
-| **P3: スタンドアロン**| 3-1 | スタンドアロンパッケージVite環境の初期化 | `packages/standalone/` | **[完了]** | AI |
+| **P3: スタンドアロン** | 3-1 | スタンドアロンパッケージVite環境の初期化 | `packages/standalone/` | **[完了]** | AI |
 | | 3-2 | localStorage版 DB接続ドライバー実装 | `packages/standalone/src/lib/db/` | **[完了]** | AI |
 | | 3-3 | 外部通信完全遮断チェッカーの実装・テスト | `check-no-network.js` | **[完了]** | AI |
 | **P4: プラグイン** | 4-1 | 個人業務効率化プラグイン（タスク管理/工数 tracker）| `packages/plugins/personal-ops/` | **[未着手]** | AI |
