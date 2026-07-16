@@ -33,5 +33,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# development logs (contains local filesystem paths, not for OSS publication)
-docs/development_logs/complete_chat_history.md
+
