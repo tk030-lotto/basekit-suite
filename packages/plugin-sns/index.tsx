@@ -212,8 +212,8 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setMessageContent(val);
-    if (val.length > 2000) {
-      setValidationError('投稿内容は2000文字以内で入力してください。');
+    if (val.length > 1000) {
+      setValidationError('投稿内容は1000文字以内で入力してください。');
     } else {
       setValidationError(null);
     }
@@ -308,8 +308,8 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
       return;
     }
 
-    if (messageContent.length > 2000) {
-      setValidationError('投稿内容は2000文字以内で入力してください。');
+    if (messageContent.length > 1000) {
+      setValidationError('投稿内容は1000文字以内で入力してください。');
       return;
     }
 
@@ -836,8 +836,8 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
                     </div>
                   </div>
 
-                  <span style={{ fontSize: '11px', color: messageContent.length > 2000 ? '#ef4444' : '#6b7280' }}>
-                    {messageContent.length} / 2000 文字
+                  <span style={{ fontSize: '11px', color: messageContent.length > 1000 ? '#ef4444' : '#6b7280' }}>
+                    {messageContent.length} / 1000 文字
                   </span>
                 </div>
 
@@ -878,7 +878,7 @@ export default function SnsPlugin({ dbConnection }: SnsPluginProps) {
 
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <textarea
-                    placeholder="メッセージを入力してください...（Shift + Enterで改行。最大2000字）"
+                    placeholder="メッセージを入力してください...（Shift + Enterで改行。最大1000字）"
                     value={messageContent}
                     onChange={handleContentChange}
                     onKeyDown={(e) => {
