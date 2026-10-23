@@ -33,8 +33,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-
-
 # Internal operational files (Common Rules)
 AI_RULES.md
 SKILLS.md
@@ -69,4 +67,7 @@ DEVELOPMENT_PLAN.md
 **/.clinerules
 **/.copilotinstructions
 **/.github/copilot-instructions.md
-`n# 仕様書除外（フェーズ2-C-β）`ndocs/specification/`npackages/*/SPEC.md
+
+# 仕様書除外（フェーズ2-C-β）
+docs/specification/
+packages/*/SPEC.md
