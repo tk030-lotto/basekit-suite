@@ -60,3 +60,6 @@ GEMINI.md
 # 開発ドキュメント（個人パス混入防止）
 HANDOVER_SUMMARY.md
 docs/development_logs/
+
+# 開発ドキュメント除外（フェーズ2-B）
+DEVELOPMENT_PLAN.md
