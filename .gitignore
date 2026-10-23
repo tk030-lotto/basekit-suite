@@ -63,3 +63,9 @@ docs/development_logs/
 
 # 開発ドキュメント除外（フェーズ2-B）
 DEVELOPMENT_PLAN.md
+
+# サブディレクトリ内AIルールファイル除外（フェーズ2-B-δ）
+**/.clauderules
+**/.clinerules
+**/.copilotinstructions
+**/.github/copilot-instructions.md
