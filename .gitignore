@@ -56,3 +56,7 @@ GEMINI.md
 **/.agents/
 **/.cursorrules
 **/SKILLS.md
+
+# 開発ドキュメント（個人パス混入防止）
+HANDOVER_SUMMARY.md
+docs/development_logs/
