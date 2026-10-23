@@ -69,3 +69,4 @@ DEVELOPMENT_PLAN.md
 **/.clinerules
 **/.copilotinstructions
 **/.github/copilot-instructions.md
+`n# 仕様書除外（フェーズ2-C-β）`ndocs/specification/`npackages/*/SPEC.md
