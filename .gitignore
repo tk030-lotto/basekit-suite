@@ -46,3 +46,13 @@ SKILLS.md
 knowledge/
 RECORD.md
 
+
+# 内部運用ファイル（共通ルール）
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+
+# Subdirectory internal rules
+**/.agents/
+**/.cursorrules
+**/SKILLS.md
