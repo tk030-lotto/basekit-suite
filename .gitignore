@@ -71,3 +71,6 @@ DEVELOPMENT_PLAN.md
 # 仕様書除外（フェーズ2-C-β）
 docs/specification/
 packages/*/SPEC.md
+
+# 設計書・開発ガイド除外（フェーズ2-C-γ）
+docs/architecture/
